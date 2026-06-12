@@ -688,7 +688,7 @@ class DelegatingParser(Parser):
             )
             if self.is_reasoning_end_streaming(current_token_ids, delta_token_ids):
                 state.reasoning_ended = True
-                current_token_ids = self.extract_content_ids(delta_token_ids)
+                current_token_ids = self.extract_content_ids(current_token_ids)
                 current_text = (
                     delta_message.content
                     if delta_message and delta_message.content

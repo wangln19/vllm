@@ -24,6 +24,7 @@ from vllm.entrypoints.chat_utils import (
     PROMPT_EMBEDS_PLACEHOLDER_TOKEN,
     ChatTemplateResolutionError,
     load_chat_template,
+    normalize_xtml_tool_result_messages,
     parse_chat_messages,
     parse_chat_messages_async,
 )
@@ -73,6 +74,20 @@ if TYPE_CHECKING:
     from .params import ChatParams
 
 logger = init_logger(__name__)
+
+
+_KIMI_V4_XTML_TEMPLATE_MARKERS: Final[tuple[str, ...]] = (
+    "[open]tools[sep]",
+    "[open]call",
+    "at('tool'",
+    "at('index'",
+)
+
+
+def _is_kimi_v4_xtml_template(chat_template: str | None) -> bool:
+    if chat_template is None:
+        return False
+    return all(marker in chat_template for marker in _KIMI_V4_XTML_TEMPLATE_MARKERS)
 
 
 # Cache of `tokenizer -> prompt_embeds placeholder token ID`. Keyed by the
@@ -896,12 +911,22 @@ class HfRenderer(BaseRenderer[HfTokenizer]):
                 _ensure_prompt_embeds_placeholder_token(tokenizer)
             )
 
+        tools = params.chat_template_kwargs.get("tools")
+        chat_template = resolve_chat_template(
+            tokenizer,
+            chat_template=params.chat_template,
+            tools=tools,
+            model_config=model_config,
+        )
+        if _is_kimi_v4_xtml_template(chat_template):
+            messages = normalize_xtml_tool_result_messages(messages)
+
         conversation, mm_data, mm_uuids = parse_chat_messages(
             messages,
             model_config,
             content_format=resolve_chat_template_content_format(
                 chat_template=params.chat_template,
-                tools=params.chat_template_kwargs.get("tools"),
+                tools=tools,
                 given_format=params.chat_template_content_format,
                 tokenizer=tokenizer,
                 model_config=model_config,
@@ -1003,12 +1028,22 @@ class HfRenderer(BaseRenderer[HfTokenizer]):
                 _ensure_prompt_embeds_placeholder_token(tokenizer)
             )
 
+        tools = params.chat_template_kwargs.get("tools")
+        chat_template = resolve_chat_template(
+            tokenizer,
+            chat_template=params.chat_template,
+            tools=tools,
+            model_config=model_config,
+        )
+        if _is_kimi_v4_xtml_template(chat_template):
+            messages = normalize_xtml_tool_result_messages(messages)
+
         conversation, mm_data, mm_uuids = await parse_chat_messages_async(
             messages,
             model_config,
             content_format=resolve_chat_template_content_format(
                 chat_template=params.chat_template,
-                tools=params.chat_template_kwargs.get("tools"),
+                tools=tools,
                 given_format=params.chat_template_content_format,
                 tokenizer=tokenizer,
                 model_config=model_config,
